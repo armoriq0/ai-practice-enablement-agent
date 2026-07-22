@@ -1,0 +1,43 @@
+version: "1.0"
+defaults:
+  decision: DENY
+  permit_ttl_seconds: 120
+actions:
+  discover_partners:
+    risk: low
+    requirements: [mission_running]
+  research_company:
+    risk: low
+    requirements: [mission_running]
+  accept_evidence:
+    risk: medium
+    requirements: [public_source, no_prompt_injection]
+  score_company:
+    risk: low
+    requirements: [verified_evidence]
+  identify_contact:
+    risk: medium
+    requirements: [public_source, business_contact]
+  generate_outreach:
+    risk: medium
+    requirements: [qualified_account, verified_evidence]
+  send_email:
+    risk: high
+    requirements: [qualified_account, verified_contact, evidence_coverage, not_suppressed, within_send_limit]
+  classify_reply:
+    risk: low
+    requirements: [mission_running]
+  propose_meeting:
+    risk: high
+    requirements: [positive_reply, within_delegation]
+  create_calendar_event:
+    risk: high
+    requirements: [accepted_slot, verified_attendees, within_delegation]
+  create_meeting_brief:
+    risk: medium
+    requirements: [meeting_booked]
+escalations:
+  - sensitive_recipient
+  - conflicting_evidence
+  - authority_expansion
+  - external_commitment_outside_policy

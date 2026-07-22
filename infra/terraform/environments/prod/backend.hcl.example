@@ -1,0 +1,3 @@
+bucket = "your-project-armoriq-partner-tfstate"
+prefix = "prod"
+

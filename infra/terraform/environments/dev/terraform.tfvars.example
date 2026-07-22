@@ -1,0 +1,5 @@
+project_id       = "your-gcp-project"
+backend_image    = "us-east1-docker.pkg.dev/your-gcp-project/armoriq-partner/backend:latest"
+frontend_image   = "us-east1-docker.pkg.dev/your-gcp-project/armoriq-partner/frontend:latest"
+operator_members = ["group:partner-operators@example.com"]
+

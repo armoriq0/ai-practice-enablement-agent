@@ -1,0 +1,56 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env: { POSTGRES_USER: partner, POSTGRES_PASSWORD: partner, POSTGRES_DB: partner }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U partner" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - run: pip install -r backend/requirements.txt
+      - run: ruff check backend tests && mypy backend/app
+      - run: alembic -c backend/alembic.ini upgrade head
+        env: { DATABASE_URL: "postgresql+asyncpg://partner:partner@localhost:5432/partner" }
+      - run: pytest -q tests/backend --cov=backend/app --cov-fail-under=80
+        env: { DATABASE_URL: "postgresql+asyncpg://partner:partner@localhost:5432/partner", APP_ENV: test, ARMORIQ_MODE: mock }
+      - run: python evals/run.py
+      - run: python scripts/validate_policies.py
+      - run: pip install pip-audit && pip-audit -r backend/requirements.txt
+  frontend:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: frontend } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: frontend/package-lock.json }
+      - run: npm ci
+      - run: npm run lint && npm run typecheck && npm run build
+      - run: npm audit --audit-level=high
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with: { terraform_version: "1.12.2" }
+      - run: terraform -chdir=infra/terraform fmt -check -recursive
+      - run: terraform -chdir=infra/terraform/environments/dev init -backend=false
+      - run: terraform -chdir=infra/terraform/environments/dev validate
+  containers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f Dockerfile.backend -t backend:test .
+      - run: docker build -f Dockerfile.frontend -t frontend:test .

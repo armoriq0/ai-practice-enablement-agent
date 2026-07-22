@@ -1,0 +1,46 @@
+# yaml-language-server: $schema=https://docs.armoriq.ai/schemas/armoriq.schema.json
+version: v1
+
+identity:
+  api_key: $ARMORIQ_API_KEY
+  user_id: partner-agent-service
+  agent_id: armoriq-partner-agent
+
+environment: production
+
+proxy:
+  url: https://proxy.armoriq.ai
+  timeout: 30
+  max_retries: 3
+
+# These operations execute through the application's local ToolAdapter today.
+# No MCP server is registered until the real Workspace tools are MCP-backed.
+mcp_servers:
+  - id: partner-agent-local
+    # Replace with the deployed public HTTPS /mcp URL before live registration.
+    url: http://localhost:8100/mcp
+    description: Governed local tools for the partner development workflow
+    auth:
+      type: api_key
+      api_key: $MCP_SERVER_API_KEY
+
+policy:
+  allow:
+    - partner-agent-local.discover
+    - partner-agent-local.web_research
+    - partner-agent-local.evidence_validator
+    - partner-agent-local.scoring_model
+    - partner-agent-local.contact_search
+    - partner-agent-local.strategy_model
+    - partner-agent-local.writing_model
+    - partner-agent-local.gmail_reply_sync
+    - partner-agent-local.qualification_model
+    - partner-agent-local.calendar_freebusy
+    - partner-agent-local.calendar_create
+    - partner-agent-local.docs_create
+  deny:
+    - partner-agent-local.gmail_send
+
+intent:
+  ttl_seconds: 120
+  require_csrg: true

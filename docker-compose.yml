@@ -1,0 +1,66 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: partner
+      POSTGRES_USER: partner
+      POSTGRES_PASSWORD: partner
+    ports:
+      - "55432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U partner -d partner"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://partner:partner@db:5432/partner
+      ARMORIQ_SIGNING_KEY: local-compose-authorization-key-change-me
+      MODEL_MODE: ${MODEL_MODE:-deterministic}
+    ports: ["8000:8080"]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    environment:
+      BACKEND_URL: http://backend:8080
+    ports: ["3000:8080"]
+    depends_on: [backend]
+    restart: unless-stopped
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    env_file:
+      - .env
+    command: ["python", "-m", "app.worker"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://partner:partner@db:5432/partner
+      ARMORIQ_SIGNING_KEY: local-compose-authorization-key-change-me
+      MODEL_MODE: ${MODEL_MODE:-deterministic}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+  mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    env_file:
+      - .env
+    command: ["sh", "-c", "uvicorn app.mcp_server:app --host 0.0.0.0 --port 8080"]
+    ports: ["8100:8080"]
+    restart: unless-stopped
+volumes:
+  postgres-data:

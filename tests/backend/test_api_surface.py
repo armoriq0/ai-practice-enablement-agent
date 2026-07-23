@@ -71,3 +71,31 @@ async def test_non_delegated_mission_cannot_run():
             f"/api/v1/missions/{created.json()['id']}/run", json={"candidates": []}
         )
         assert response.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_seed_mission_persists_operator_candidates_without_running_pipeline():
+    await create_schema()
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        created = await client.post(
+            "/api/v1/missions",
+            json={"objective": "Seed a bounded list for asynchronous processing"},
+        )
+        mission_id = created.json()["id"]
+        payload = {
+            "candidates": [
+                {
+                    "name": "Seeded Partner",
+                    "domain": "seeded.example",
+                    "category": "ai_consulting",
+                }
+            ]
+        }
+        seeded = await client.post(f"/api/v1/missions/{mission_id}/seed", json=payload)
+        assert seeded.status_code == 200
+        assert seeded.json()["added"] == 1
+        accounts = (await client.get(f"/api/v1/missions/{mission_id}/accounts")).json()
+        assert len(accounts) == 1
+        assert accounts[0]["state"] == "DISCOVERED"

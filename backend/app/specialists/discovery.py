@@ -1,3 +1,5 @@
+import hashlib
+
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,7 +14,7 @@ from ..tools import GovernedToolGateway
 
 
 class DiscoveryOutput(BaseModel):
-    candidates: list[Candidate] = Field(max_length=3)
+    candidates: list[Candidate] = Field(max_length=1000)
 
 
 class DiscoveryAgent:
@@ -42,24 +44,32 @@ class DiscoveryAgent:
                 )
             )
         )
-        fallback = DiscoveryOutput(candidates=candidates)
-        typed = await self.model.generate(
-            agent=self.name,
-            instructions=self.instructions,
-            payload={
-                "mission_objective": mission.objective,
-                "mission_policy": mission.policy,
-                "candidate_limit": min(
-                    int(mission.policy.get("max_outreach", 10)), 3
-                ),
-                "exclude_domains": existing_domains,
-                "seed_candidates": [c.model_dump(mode="json") for c in candidates],
-            },
-            output_type=self.output_type,
-            budget=self.budget,
-            fallback=fallback,
-            web_search=True,
-        )
+        if candidates:
+            # Operator-supplied seeds are already the discovery result. Preserve
+            # the complete bounded list instead of asking the model to select a
+            # maximum of three entries from it.
+            typed = DiscoveryOutput(candidates=candidates)
+        else:
+            typed = await self.model.generate(
+                agent=self.name,
+                instructions=self.instructions,
+                payload={
+                    "mission_objective": mission.objective,
+                    "mission_policy": mission.policy,
+                    "candidate_limit": min(
+                        int(mission.policy.get("max_outreach", 10)), 3
+                    ),
+                    "exclude_domains": existing_domains,
+                    "seed_candidates": [],
+                },
+                output_type=self.output_type,
+                budget=self.budget,
+                fallback=DiscoveryOutput(candidates=[]),
+                web_search=True,
+            )
+        candidate_fingerprint = hashlib.sha256(
+            "\n".join(sorted(candidate.domain for candidate in typed.candidates)).encode()
+        ).hexdigest()[:16]
         request = ActionRequest(
             mission_id=mission.id,
             agent=self.name,
@@ -69,7 +79,7 @@ class DiscoveryAgent:
                 "seed_candidates": [c.model_dump(mode="json") for c in typed.candidates],
                 "source": "openai_web_search",
             },
-            idempotency_key=f"{mission.id}:discover",
+            idempotency_key=f"{mission.id}:discover:{candidate_fingerprint}",
         )
         permit = await self.governance.authorize_tool_call(
             db, request, {"mission_running": True}
@@ -109,4 +119,10 @@ class DiscoveryAgent:
                 db.add(existing)
                 await db.flush()
             accounts.append(existing)
-        return accounts
+        return list(
+            await db.scalars(
+                select(PartnerAccount)
+                .where(PartnerAccount.mission_id == mission.id)
+                .order_by(PartnerAccount.created_at)
+            )
+        )

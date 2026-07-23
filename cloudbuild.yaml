@@ -1,8 +1,6 @@
 substitutions:
   _REGION: us-east1
   _REPOSITORY: armoriq-partner
-  _BACKEND_SERVICE: armoriq-partner-backend
-  _FRONTEND_SERVICE: armoriq-partner-frontend
   _TAG: latest
 steps:
   - name: gcr.io/cloud-builders/docker

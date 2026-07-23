@@ -85,3 +85,35 @@ async def test_unsourced_contact_is_denied_before_outreach():
             for value in decisions
         )
         assert not any(value["action"] == "send_email" for value in decisions)
+
+
+@pytest.mark.asyncio
+async def test_operator_seed_list_is_not_truncated_to_discovery_limit():
+    await create_schema()
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        created = await client.post(
+            "/api/v1/missions",
+            json={
+                "objective": "Evaluate the complete operator-provided partner list",
+                "max_outreach": 10,
+            },
+        )
+        mission_id = created.json()["id"]
+        candidates = [
+            {
+                "name": f"Seed {index}",
+                "domain": f"seed-{index}.example",
+                "category": "ai_consulting",
+            }
+            for index in range(5)
+        ]
+        response = await client.post(
+            f"/api/v1/missions/{mission_id}/run", json={"candidates": candidates}
+        )
+        assert response.status_code == 200
+        accounts = (await client.get(f"/api/v1/missions/{mission_id}/accounts")).json()
+        assert {account["domain"] for account in accounts} == {
+            candidate["domain"] for candidate in candidates
+        }

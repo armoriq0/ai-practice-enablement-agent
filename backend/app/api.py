@@ -149,6 +149,50 @@ async def run_mission(mission_id: str, payload: MissionRun, db: Db) -> Mission:
     return await supervisor.run(db, mission, payload.candidates)
 
 
+@app.post("/api/v1/missions/{mission_id}/seed")
+async def seed_mission(mission_id: str, payload: MissionRun, db: Db) -> dict[str, int | str]:
+    mission = await db.get(Mission, mission_id)
+    if not mission:
+        raise HTTPException(404, "Mission not found")
+    if not mission.policy.get("auto_execute", True):
+        raise HTTPException(409, "Mission is not delegated for autonomous execution")
+    existing_domains = set(
+        await db.scalars(
+            select(PartnerAccount.domain).where(
+                PartnerAccount.mission_id == mission_id
+            )
+        )
+    )
+    added = 0
+    for candidate in payload.candidates:
+        if candidate.domain in existing_domains:
+            continue
+        db.add(
+            PartnerAccount(
+                mission_id=mission.id,
+                name=candidate.name,
+                domain=candidate.domain,
+                data={
+                    "category": candidate.category,
+                    "public_business_email": candidate.public_business_email,
+                    "contact_source": candidate.contact_source,
+                    "source": "operator_seed",
+                },
+            )
+        )
+        existing_domains.add(candidate.domain)
+        added += 1
+    mission.status = MissionStatus.PAUSED
+    await append_audit(
+        db,
+        mission.id,
+        "mission.seeded",
+        {"added": added, "total_submitted": len(payload.candidates)},
+    )
+    await db.commit()
+    return {"mission_id": mission.id, "added": added, "total": len(existing_domains)}
+
+
 @app.get("/api/v1/missions/{mission_id}/accounts")
 async def mission_accounts(mission_id: str, db: Db) -> list[dict]:
     accounts = (

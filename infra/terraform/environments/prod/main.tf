@@ -22,7 +22,7 @@ module "platform" {
   operator_members         = var.operator_members
   enable_schedulers        = var.enable_schedulers
   daily_discovery_schedule = var.daily_discovery_schedule
-  deletion_protection      = true
+  deletion_protection      = false
   database_tier            = var.database_tier
   vpc_connector            = var.vpc_connector
 }

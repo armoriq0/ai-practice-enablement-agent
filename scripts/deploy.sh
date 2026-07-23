@@ -19,10 +19,14 @@ gcloud builds submit --config cloudbuild.yaml \
   --substitutions "_REGION=${GCP_REGION},_REPOSITORY=${REPOSITORY},_TAG=${TAG}" .
 
 terraform -chdir="${TF_DIR}" init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="prefix=${ENVIRONMENT}"
+
+# Cloud Run connects to the database during application startup. Provision the
+# database and synchronize its out-of-band password before creating a revision.
 terraform -chdir="${TF_DIR}" apply \
+  -target="module.platform.google_sql_database.application" \
   -var="project_id=${GCP_PROJECT_ID}" -var="region=${GCP_REGION}" \
   -var="backend_image=${BACKEND_IMAGE}" -var="frontend_image=${FRONTEND_IMAGE}" \
-  -var="enable_schedulers=${ENABLE_SCHEDULERS:-true}"
+  -var="enable_schedulers=false"
 
 INSTANCE="${APP_NAME}-${ENVIRONMENT}-postgres"
 if gcloud sql users list --instance "${INSTANCE}" --format='value(name)' | grep -qx partner; then
@@ -30,6 +34,11 @@ if gcloud sql users list --instance "${INSTANCE}" --format='value(name)' | grep 
 else
   gcloud sql users create partner --instance "${INSTANCE}" --password "${DATABASE_PASSWORD}"
 fi
+
+terraform -chdir="${TF_DIR}" apply \
+  -var="project_id=${GCP_PROJECT_ID}" -var="region=${GCP_REGION}" \
+  -var="backend_image=${BACKEND_IMAGE}" -var="frontend_image=${FRONTEND_IMAGE}" \
+  -var="enable_schedulers=${ENABLE_SCHEDULERS:-true}"
 
 "$(dirname "$0")/migrate.sh"
 "$(dirname "$0")/smoke_test.sh"

@@ -30,7 +30,15 @@ async def run_cycle() -> int:
         missions = list(
             await db.scalars(
                 select(Mission)
-                .where(Mission.status.in_([MissionStatus.CREATED, MissionStatus.COMPLETED]))
+                .where(
+                    Mission.status.in_(
+                        [
+                            MissionStatus.CREATED,
+                            MissionStatus.PAUSED,
+                            MissionStatus.COMPLETED,
+                        ]
+                    )
+                )
                 .order_by(Mission.created_at)
             )
         )

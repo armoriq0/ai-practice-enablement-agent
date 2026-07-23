@@ -53,7 +53,7 @@ async def test_autonomous_mission_reaches_meeting_with_armoriq_permits():
 
 
 @pytest.mark.asyncio
-async def test_unsourced_contact_is_denied_before_outreach():
+async def test_unsourced_contact_allows_draft_but_denies_delivery():
     await create_schema()
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
@@ -81,10 +81,21 @@ async def test_unsourced_contact_is_denied_before_outreach():
             await client.get(f"/api/v1/missions/{mission_id}/policy-decisions")
         ).json()
         assert any(
-            value["action"] == "identify_contact" and value["outcome"] == "DENY"
+            value["action"] == "identify_contact" and value["outcome"] == "PERMIT"
             for value in decisions
         )
-        assert not any(value["action"] == "send_email" for value in decisions)
+        assert sum(
+            value["action"] == "generate_outreach"
+            and value["outcome"] == "PERMIT"
+            for value in decisions
+        ) == 2
+        assert any(
+            value["action"] == "send_email" and value["outcome"] == "DENY"
+            for value in decisions
+        )
+        assert accounts[0]["data"]["strategy"]
+        assert accounts[0]["data"]["body"]
+        assert accounts[0]["data"]["contact"]["name"] is None
 
 
 @pytest.mark.asyncio

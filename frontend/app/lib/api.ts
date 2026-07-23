@@ -62,7 +62,7 @@ export type MissionAccount = {
   score?: number; tier?: string;
   data: {
     evidence?: Array<{ url: string; claim: string; public: boolean }>;
-    contact?: { role?: string; email?: string; source?: string };
+    contact?: { name?: string; role?: string; email?: string; source?: string };
     value_hypothesis?: string; strategy?: string; subject?: string; body?: string;
   };
 };

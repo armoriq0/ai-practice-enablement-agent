@@ -17,7 +17,7 @@ actions:
     requirements: [verified_evidence]
   identify_contact:
     risk: medium
-    requirements: [public_source, business_contact]
+    requirements: [public_source, no_prompt_injection]
   generate_outreach:
     risk: medium
     requirements: [qualified_account, verified_evidence]

@@ -6,6 +6,7 @@ from .base import SpecialistAgent, SpecialistSpec
 
 
 class BusinessContact(BaseModel):
+    name: str | None
     role: str
     email: str | None
     source: str | None
@@ -34,6 +35,7 @@ class ContactAgent(SpecialistAgent[ContactOutput]):
         source = account.data.get("contact_source")
         return ContactOutput(
             contact=BusinessContact(
+                name=None,
                 role="AI Practice Leader",
                 email=str(email) if email else None,
                 source=str(source) if source else None,

@@ -226,11 +226,13 @@ async def policy_decisions(mission_id: str, db: Db) -> list[dict]:
     return [
         {
             "id": v.id,
+            "account_id": v.account_id,
             "action": v.action,
             "outcome": v.outcome,
             "reason": v.reason,
             "permit_id": v.permit_id,
             "input_hash": v.input_hash,
+            "context": v.context,
             "created_at": v.created_at,
         }
         for v in values

@@ -23,10 +23,12 @@ export type AgentRun = {
 
 export type Decision = {
   id: string;
+  account_id?: string;
   action: string;
   agent_name?: string;
   outcome: string;
   reason?: string;
+  context?: Record<string, unknown>;
   created_at?: string;
 };
 
@@ -64,6 +66,7 @@ export type MissionAccount = {
     evidence?: Array<{ url: string; claim: string; public: boolean }>;
     contact?: { name?: string; role?: string; email?: string; source?: string };
     value_hypothesis?: string; strategy?: string; subject?: string; body?: string;
+    prompt_injection?: boolean; suppressed?: boolean;
   };
 };
 

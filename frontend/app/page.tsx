@@ -7,7 +7,8 @@ import { createMission, DashboardData, loadDashboard, loadMissionDetails, Missio
 const EMPTY: DashboardData = { missions: [], runs: [], decisions: [], escalations: [], audit: [] };
 const nav = [
   ["Command center", Activity], ["Missions", Target], ["Agent activity", Orbit],
-  ["ArmorIQ decisions", Gavel], ["Exceptions", Alert], ["Audit trail", Scroll],
+  ["ArmorIQ decisions", Gavel], ["Exceptions", Alert], ["Excluded cases", Shield],
+  ["Audit trail", Scroll],
 ] as const;
 
 function title(value = "") { return value.replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase()); }
@@ -76,19 +77,19 @@ export default function Console() {
       <div className="brand"><div className="brand-mark"><Shield /></div><div><strong>ArmorIQ</strong><span>PARTNER OPERATIONS</span></div></div>
       <nav aria-label="Primary navigation">
         <p>OPERATIONS</p>
-        {nav.slice(0, 5).map(([label, Icon]) => <button key={label} className={active === label ? "selected" : ""} onClick={() => setActive(label)}><Icon />{label}{label === "Exceptions" && stats.exceptions > 0 ? <em>{stats.exceptions}</em> : null}</button>)}
+        {nav.slice(0, 6).map(([label, Icon]) => <button key={label} className={active === label ? "selected" : ""} onClick={() => setActive(label)}><Icon />{label}{label === "Exceptions" && stats.exceptions > 0 ? <em>{stats.exceptions}</em> : null}{label === "Excluded cases" && details ? <em>{partitionAccounts(details).excluded.length}</em> : null}</button>)}
         <p>GOVERNANCE</p>
-        {nav.slice(5).map(([label, Icon]) => <button key={label} className={active === label ? "selected" : ""} onClick={() => setActive(label)}><Icon />{label}</button>)}
+        {nav.slice(6).map(([label, Icon]) => <button key={label} className={active === label ? "selected" : ""} onClick={() => setActive(label)}><Icon />{label}</button>)}
       </nav>
       <div className="side-footer"><button><Settings />Configuration</button><div className="identity"><span>AK</span><div><strong>Alex Kim</strong><small>Mission operator</small></div><i /></div></div>
     </aside>
 
     <main>
-      <header><div><div className="eyebrow"><span className="live-dot"/> AUTONOMOUS SYSTEM ONLINE</div><h1>{active === "Command center" && completed ? "Mission results" : active}</h1><p>{active === "Command center" && completed ? "Completed findings stay visible while the next partner search runs in the background." : "Inspect the autonomous workflow and its governed execution history."}</p></div><div className="header-actions"><button className="icon-button" onClick={refresh} aria-label="Refresh"><Refresh className={loading ? "spin" : ""}/></button><button className="primary" onClick={() => setModal(true)}><Plus /> New mission</button></div></header>
+      <header><div><div className="eyebrow"><span className="live-dot"/> AUTONOMOUS SYSTEM ONLINE</div><h1>{active === "Command center" && completed ? "Latest scan results" : active}</h1><p>{active === "Command center" && completed ? "New and partially processed discoveries appear here while the autonomous partner scan continues daily." : "Inspect the autonomous workflow and its governed execution history."}</p></div><div className="header-actions"><button className="icon-button" onClick={refresh} aria-label="Refresh"><Refresh className={loading ? "spin" : ""}/></button><button className="primary" onClick={() => setModal(true)}><Plus /> New mission</button></div></header>
 
       {error && <div className="offline"><Alert/><div><strong>Control plane connection</strong><span>{error}. Retrying automatically; no actions will execute while authorization is unavailable.</span></div><button onClick={refresh}>Retry</button></div>}
 
-      {active !== "Command center" ? <SectionView active={active} data={data}/> : completed ? <MissionResult mission={completed} details={details}/> : <><section className="metrics">
+      {active !== "Command center" ? <SectionView active={active} data={data} mission={completed} details={details}/> : completed ? <MissionResult mission={completed} details={details}/> : <><section className="metrics">
         <Metric label="Active missions" value={stats.activeMissions} detail={`${data.missions.length} total configured`} icon={<Target/>}/>
         <Metric label="Agents working" value={stats.activeRuns} detail={`${data.runs.length} recent runs`} icon={<Orbit/>} pulse/>
         <Metric label="Auto-authorized" value={`${stats.authorization}%`} detail="of resolved decisions" icon={<Shield/>}/>
@@ -134,11 +135,12 @@ export default function Console() {
   </div>;
 }
 
-function SectionView({ active, data }: { active: string; data: DashboardData }) {
+function SectionView({ active, data, mission, details }: { active: string; data: DashboardData; mission?: Mission; details: MissionDetails | null }) {
   if (active === "Missions") return <section className="panel section-view"><PanelHead title="All missions" sub="Continuous and one-time objectives"/><div className="mission-list">{data.missions.map((mission) => <article className="mission" key={mission.id}><div className="mission-top"><div><div className="mission-name"><strong>{mission.name}</strong><Badge value={mission.status}/></div><p>{mission.objective}</p></div></div><div className="mission-meta"><span><b>{mission.accounts_qualified || 0}</b> qualified</span><span><b>{mission.meetings_booked || 0}/{mission.target_meetings || 0}</b> meetings</span><span>{mission.policy?.continuous ? "Runs daily" : "One time"}</span></div></article>)}</div></section>;
   if (active === "Agent activity") return <section className="panel section-view"><PanelHead title="Agent activity" sub="Specialist execution history"/><div className="timeline">{data.runs.map((run) => <div className="run" key={run.id}><div className={`agent-glyph ${run.status.toLowerCase()}`}><Orbit/></div><div><div><strong>{title(run.agent_name)}</strong><Badge value={run.status}/></div><p>{run.current_step || "Processing delegated mission work"}</p><small>{ago(run.started_at)}</small></div></div>)}</div></section>;
   if (active === "ArmorIQ decisions") return <section className="panel section-view"><PanelHead title="ArmorIQ decisions" sub="Permit and deny outcomes across missions"/><DecisionTable decisions={data.decisions}/></section>;
   if (active === "Exceptions") return <section className="panel section-view"><PanelHead title="Exception queue" sub="Actions requiring operator attention"/>{data.escalations.length ? <div className="exceptions">{data.escalations.map((item) => <article key={item.id}><div className={`severity ${item.severity.toLowerCase()}`}><Alert/></div><div><strong>{title(item.title)}</strong><p>{item.reason}</p><small>{ago(item.created_at)}</small></div></article>)}</div> : <div className="clear-state"><Shield/><strong>All within policy</strong><p>No open exceptions require attention.</p></div>}</section>;
+  if (active === "Excluded cases") return <ExcludedCases mission={mission} details={details}/>;
   return <section className="panel section-view"><PanelHead title="Audit trail" sub="Tamper-evident workflow events"/><div className="audit-list">{data.audit.map((event) => <article key={event.id}><Scroll/><div><strong>{title(event.event_type)}</strong><p>{event.summary || "Recorded workflow event"}</p><small>{title(event.actor || "system")} · {ago(event.created_at)}</small></div>{event.integrity_verified && <Badge value="Verified"/>}</article>)}</div></section>;
 }
 
@@ -148,17 +150,66 @@ function DecisionTable({ decisions }: { decisions: DashboardData["decisions"] })
 
 function MissionResult({ mission, details }: { mission: Mission; details: MissionDetails | null }) {
   if (!details) return <section className="panel"><Empty icon={<Orbit/>} title="Loading mission result" text="Retrieving partners, evidence, and policy decisions."/></section>;
-  const denied = details.decisions.find((decision) => decision.outcome.toLowerCase() === "deny");
+  const { visible, excluded } = partitionAccounts(details);
   return <div className="result-view">
-    <section className="result-hero"><div><div className="mission-name"><h2>{mission.name}</h2><Badge value={mission.status}/></div><p>{mission.objective}</p></div><div className="result-summary"><span><strong>{details.accounts.length}</strong>discovered</span><span><strong>{mission.accounts_qualified}</strong>qualified</span><span><strong>{details.decisions.filter((d) => d.outcome.toLowerCase() === "permit").length}</strong>authorized</span></div></section>
-    {details.accounts.map((account) => <article className="account-result" key={account.id}>
-      <div className="account-head"><div><span className="kicker">SELECTED PARTNER</span><h2>{account.name}</h2><a href={`https://${account.domain}`} target="_blank" rel="noreferrer">{account.domain}</a></div><div className="score"><small>FIT SCORE</small><strong>{account.score ?? "—"}</strong><span>Tier {account.tier ?? "—"}</span></div></div>
+    <section className="result-hero"><div><div className="mission-name"><h2>{mission.name}</h2><Badge value={mission.status}/></div><p>{mission.objective}</p></div><div className="result-summary"><span><strong>{visible.length}</strong>active cases</span><span><strong>{mission.accounts_qualified}</strong>qualified</span><span><strong>{excluded.length}</strong>excluded</span></div></section>
+    {visible.map((account) => {
+      const denied = decisionsForAccount(details, account.id).findLast((decision) => decision.outcome.toLowerCase() === "deny");
+      return <article className="account-result" key={account.id}>
+      <div className="account-head"><div><span className="kicker">SCAN RESULT</span><h2>{account.name}</h2><a href={`https://${account.domain}`} target="_blank" rel="noreferrer">{account.domain}</a></div><div className="score"><small>FIT SCORE</small><strong>{account.score ?? "—"}</strong><span>Tier {account.tier ?? "—"}</span></div></div>
       <div className="result-grid"><section className="result-card"><h3>Partnership case</h3><p>{account.data.value_hypothesis || account.data.strategy || "No partnership hypothesis recorded."}</p></section><section className="result-card"><h3>Verified contact</h3>{account.data.contact?.email ? <><strong>{account.data.contact.name || account.data.contact.role || "Business contact"}</strong>{account.data.contact.name && account.data.contact.role && <span>{account.data.contact.role}</span>}<a href={`mailto:${account.data.contact.email}`}>{account.data.contact.email}</a>{account.data.contact.source && <a className="source-link" href={account.data.contact.source} target="_blank" rel="noreferrer">Public source <Chevron/></a>}</> : account.data.contact?.name ? <><strong>{account.data.contact.name}</strong><span>{account.data.contact.role || "Relevant decision-maker"}</span><p>No exact publicly sourced professional email found.</p></> : <p>No relevant public professional contact found.</p>}</section></div>
       <section className="result-card evidence-card"><h3>Evidence used</h3><div className="evidence-list">{account.data.evidence?.map((item, index) => <a href={item.url} target="_blank" rel="noreferrer" key={`${item.url}-${index}`}><span>{index + 1}</span><p>{item.claim}</p><Chevron/></a>)}</div></section>
       <section className="result-card draft-card"><div><h3>Generated outreach</h3><Badge value={denied ? "Not sent — policy denied" : account.state}/></div><strong>{account.data.subject || "No subject generated"}</strong><pre>{account.data.body || "No outreach draft generated."}</pre>{denied && <p className="policy-outcome"><Shield/>ArmorIQ stopped delivery: {title(denied.reason || "policy denied")}</p>}</section>
-    </article>)}
+    </article>;})}
+    {!visible.length && <section className="panel"><Empty icon={<Target/>} title="No active cases yet" text="Unqualified, unsafe, and legacy-denied cases are available under Excluded cases."/></section>}
     <section className="panel decision-path"><PanelHead title="ArmorIQ decision path" sub="Authorization at each mission stage"/><div>{details.decisions.map((decision) => <div className="decision-step" key={decision.id}><Badge value={decision.outcome}/><span><strong>{title(decision.action)}</strong><small>{decision.reason || "Within delegated authority"}</small></span></div>)}</div></section>
   </div>;
+}
+
+type Exclusion = { account: MissionDetails["accounts"][number]; category: "Unqualified" | "Unsafe" | "Historical denial"; reason: string };
+
+function decisionsForAccount(details: MissionDetails, accountId: string) {
+  return details.decisions.filter((decision) => decision.account_id === accountId);
+}
+
+function exclusionFor(account: MissionDetails["accounts"][number], decisions: MissionDetails["decisions"]): Omit<Exclusion, "account"> | null {
+  const denials = decisions.filter((decision) => decision.outcome.toLowerCase() === "deny");
+  const unsafe = account.data.prompt_injection || account.data.suppressed || denials.find((decision) =>
+    decision.action === "score_company" && /unsafe evidence|suppressed|prompt injection/i.test(decision.reason || ""));
+  if (unsafe) return { category: "Unsafe", reason: typeof unsafe === "object" ? unsafe.reason || "Unsafe source evidence detected" : "Unsafe source evidence detected" };
+
+  const unqualified = denials.findLast((decision) => decision.action === "generate_outreach" && /qualified_account/i.test(decision.reason || ""));
+  if ((account.score != null && account.score < 70) || (account.score == null && account.state === "POLICY_DENIED" && unqualified)) {
+    return { category: "Unqualified", reason: unqualified?.reason || `Fit score ${account.score} is below the qualification threshold` };
+  }
+
+  const legacy = denials.find((decision) => decision.action === "identify_contact" && /business_contact/i.test(decision.reason || ""));
+  if (account.state === "POLICY_DENIED" && legacy) return { category: "Historical denial", reason: legacy.reason || "Denied by a retired contact policy" };
+  return null;
+}
+
+function partitionAccounts(details: MissionDetails) {
+  const visible: MissionDetails["accounts"] = [];
+  const excluded: Exclusion[] = [];
+  for (const account of details.accounts) {
+    const exclusion = exclusionFor(account, decisionsForAccount(details, account.id));
+    if (exclusion) excluded.push({ account, ...exclusion });
+    else visible.push(account);
+  }
+  return { visible, excluded };
+}
+
+function ExcludedCases({ mission, details }: { mission?: Mission; details: MissionDetails | null }) {
+  if (!mission || !details) return <section className="panel"><Empty icon={<Orbit/>} title="Loading excluded cases" text="Retrieving case decisions and safety outcomes."/></section>;
+  const { excluded } = partitionAccounts(details);
+  return <section className="panel section-view excluded-view">
+    <PanelHead title="Excluded cases" sub="Unqualified, unsafe, and legacy-denied cases kept out of the active pipeline"/>
+    {excluded.length ? <div className="excluded-list">{excluded.map(({ account, category, reason }) => <article key={account.id}>
+      <div className={`exclusion-icon ${category.toLowerCase().replace(" ", "-")}`}><Shield/></div>
+      <div><div className="excluded-title"><strong>{account.name}</strong><Badge value={category}/></div><a href={`https://${account.domain}`} target="_blank" rel="noreferrer">{account.domain}</a><p>{reason}</p></div>
+      <div className="excluded-score"><small>FIT SCORE</small><strong>{account.score ?? "—"}</strong></div>
+    </article>)}</div> : <div className="clear-state"><Shield/><strong>No excluded cases</strong><p>All discovered cases are currently eligible for the main results page.</p></div>}
+  </section>;
 }
 
 function Metric({ label, value, detail, icon, pulse, warning }: { label: string; value: string | number; detail: string; icon: React.ReactNode; pulse?: boolean; warning?: boolean }) {
